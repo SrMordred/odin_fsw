@@ -13,6 +13,7 @@ FSW_WATCHING_EVENTS : DWORD :
 FSW :: struct {
     iocp_handler: HANDLE,
     buffer: [16 * 1024]byte,
+    fws_id_list: [dynamic]^FSW_ID
 }
 
 /*
@@ -43,13 +44,14 @@ FSW_Event_Type :: enum {
 FSW_Event :: struct {
     filename: string,
     old_filename:string,
-    event: FSW_Event_Type }
+    event: FSW_Event_Type 
+}
 
 fsw_create :: proc () -> (FSW, DWORD) {
     iocp := CreateIoCompletionPort(INVALID_HANDLE, nil, 0,1);
     if iocp == INVALID_HANDLE do return FSW{}, GetLastError();
 
-    return FSW{ iocp_handler = iocp }, 0;
+    return FSW{ iocp_handler = iocp, fws_id_list = [dynamic]^FSW_ID{} }, 0;
 }
 
 fsw_add_dir :: proc (fsw: ^FSW, path: string) -> DWORD {
@@ -76,6 +78,8 @@ fsw_add_dir :: proc (fsw: ^FSW, path: string) -> DWORD {
     fsw_id := new( FSW_ID );
     fsw_id.dir_handle = handle;
     fsw_id.path       = path;
+
+    append(&fsw.fws_id_list, fsw_id );
 
     if ReadDirectoryChangesW(
         fsw_id.dir_handle, 
@@ -161,4 +165,13 @@ fsw_get_events :: proc ( fsw: ^FSW )  -> []FSW_Event {
     }
 
     return events[:];
+}
+
+fsw_destroy :: proc( fsw: ^ FSW ) {
+    for ptr in fsw.fws_id_list {
+        CloseHandle(ptr.dir_handle);
+        free(ptr);
+    }
+    CloseHandle( fsw.iocp_handler );
+    delete(fsw.fws_id_list);
 }

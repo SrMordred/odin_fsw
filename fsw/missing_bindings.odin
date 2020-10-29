@@ -47,6 +47,8 @@ foreign {
 
 GetLastError    :: win.GetLastError;
 CreateFileW     :: win.CreateFileW;
+CloseHandle     :: win.CloseHandle;
+
 
 Wstring         :: win32.Wstring;
 utf8_to_wstring :: win.utf8_to_wstring;
