@@ -7,6 +7,7 @@ This is a very simple file system watcher for Odin, using windows api (IOCP)
 - Wait `until arrive` events as alternative
 - More control over windows api buffer memory size
 - Watch single files instead of directories
+- Free resources
 
 ## Known issue related to windows API
 	
