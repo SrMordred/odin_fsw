@@ -15,10 +15,11 @@ main :: proc (){
     err_code = fsw_add_dir(&fsw, "." );
     //  looping for events
     for { 
+        
         for evt in fsw_get_events( &fsw ) {
             fmt.printf("{}\n", evt);
             // sleep one second here to not kill your cpu :)
-            time.sleep( time.Second );
+            time.sleep( time.Millisecond );
         }
     }
     //  err_code is GetLastError() of windows api

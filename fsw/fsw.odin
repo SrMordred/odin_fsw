@@ -1,6 +1,7 @@
 package fsw
 
 import "core:fmt"
+import "core:mem"
 eprintf :: fmt.eprintf;
 
 //  events that are being whatched now. 
@@ -11,26 +12,15 @@ FSW_WATCHING_EVENTS : DWORD :
     FILE_NOTIFY_CHANGE_LAST_WRITE;
 
 FSW :: struct {
+    allocator : mem.Allocator,
     iocp_handler: HANDLE,
-    buffer: [16 * 1024]byte,
+    buffer: []byte,
     fws_id_list: [dynamic]^FSW_ID
 }
 
-/*
-    The overlapped trick:
-    You can use the ^OVERLAPPED result as a identifier of which event type is beying queried by 
-    GetQueuedCompletionStatus. 
-    The resulting ^OVERLAPPED pointer would be the same as the one you create. 
-    I got a step further and expanded the data so that we can have information about the event beyond 
-    the overlapped pointer.
-    so now u can cast the ^OVERLAPPED result to ^FSW_ID and get more informations
-    This data can be expanded, you just have to keep OVERLAPPED as the first member of the struct, orelse things will
-    break when u cast it to ^FSW_ID.
-*/
-
 FSW_ID :: struct {
     overlapped: OVERLAPPED,
-    dir_handle: HANDLE,
+    handle: HANDLE,
     path: string
 }
 
@@ -47,15 +37,20 @@ FSW_Event :: struct {
     event: FSW_Event_Type 
 }
 
-fsw_create :: proc () -> (FSW, DWORD) {
+fsw_create :: proc ( buffer_size:= 16 * 1024, allocator:= context.allocator ) -> (FSW, DWORD) {
     iocp := CreateIoCompletionPort(INVALID_HANDLE, nil, 0,1);
     if iocp == INVALID_HANDLE do return FSW{}, GetLastError();
 
-    return FSW{ iocp_handler = iocp, fws_id_list = [dynamic]^FSW_ID{} }, 0;
+    return FSW{ 
+        allocator = allocator,
+        iocp_handler = iocp, 
+        buffer = make([]byte, buffer_size, allocator),
+        fws_id_list = [dynamic]^FSW_ID{} 
+    }, 0;
 }
 
 fsw_add_dir :: proc (fsw: ^FSW, path: string) -> DWORD {
-    wide_path := utf8_to_wstring( path );
+    wide_path := utf8_to_wstring( path, context.temp_allocator );
     handle    := CreateFileW( wide_path , 
         FILE_LIST_DIRECTORY,
         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, 
@@ -75,16 +70,16 @@ fsw_add_dir :: proc (fsw: ^FSW, path: string) -> DWORD {
         return GetLastError();
     }
 
-    fsw_id := new( FSW_ID );
-    fsw_id.dir_handle = handle;
-    fsw_id.path       = path;
+    fsw_id :      = new( FSW_ID, fsw.allocator );
+    fsw_id.handle = handle;
+    fsw_id.path   = path;
 
     append(&fsw.fws_id_list, fsw_id );
 
     if ReadDirectoryChangesW(
-        fsw_id.dir_handle, 
-        &fsw.buffer,
-        size_of(fsw.buffer),
+        fsw_id.handle, 
+        &fsw.buffer[0],
+        u32( len(fsw.buffer) ),
         true,
         FSW_WATCHING_EVENTS,
         nil, 
@@ -110,14 +105,14 @@ fsw_get_events :: proc ( fsw: ^FSW )  -> []FSW_Event {
     events := make( [dynamic]FSW_Event, context.temp_allocator );
     event_old_filename:= "";
 
-    notifications := cast(^FILE_NOTIFY_INFORMATION)( &fsw.buffer );
+    notifications := (^FILE_NOTIFY_INFORMATION)( &fsw.buffer[0] );
     
     for {
 
-        filename_len := int( notifications.file_name_length );
-        filename_w   := Wstring(&notifications.file_name[0]);
-        filename    := wstring_to_utf8( auto_cast filename_w , (filename_len / size_of( type_of(filename_w^))), context.temp_allocator );
-        action      := notifications.action;
+        filename_len    := int( notifications.file_name_length );
+        filename_w      := Wstring(&notifications.file_name[0]);
+        filename        := wstring_to_utf8( auto_cast filename_w , (filename_len / size_of( type_of(filename_w^))), context.temp_allocator );
+        action          := notifications.action;
 
         event_filename := filename;
         event_event_type: FSW_Event_Type;
@@ -144,17 +139,17 @@ fsw_get_events :: proc ( fsw: ^FSW )  -> []FSW_Event {
         }
 
         if notifications.next_entry_offset == 0 do break;
-        notifications = cast(^FILE_NOTIFY_INFORMATION) ((cast(uintptr)notifications) + uintptr(notifications.next_entry_offset));
+        notifications = (^FILE_NOTIFY_INFORMATION)( uintptr(notifications) + uintptr(notifications.next_entry_offset) );
     }
 
     //  When event is captured i need to call it again
     //  this is the right way ??
 
-    fsw_id := cast(^FSW_ID) overlapped;
+    fsw_id := (^FSW_ID)(overlapped);
     if ReadDirectoryChangesW(
-        fsw_id.dir_handle, 
-        &fsw.buffer,
-        size_of(fsw.buffer),
+        fsw_id.handle, 
+        &fsw.buffer[0],
+        u32( len(fsw.buffer) ),
         true ,
         FSW_WATCHING_EVENTS,
         nil , 
@@ -169,9 +164,10 @@ fsw_get_events :: proc ( fsw: ^FSW )  -> []FSW_Event {
 
 fsw_destroy :: proc( fsw: ^ FSW ) {
     for ptr in fsw.fws_id_list {
-        CloseHandle(ptr.dir_handle);
+        CloseHandle(ptr.handle);
         free(ptr);
     }
     CloseHandle( fsw.iocp_handler );
     delete(fsw.fws_id_list);
+    delete(fsw.buffer);
 }
