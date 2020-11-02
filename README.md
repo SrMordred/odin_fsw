@@ -2,12 +2,9 @@
 
 This is a very simple file system watcher for Odin, using windows api (IOCP)
 
-## TODO:
+This is a not a complete solution for File Watching, just a simple layer on top of `ReadDirectoryChangesW` + `IOCP`. So it will only accept directories to watch. 
+Making it capable of watching only files, or to better control when events occur(see the issue below), will be left to the user to develop, since there are tradeoffs that i don´t want this lib to made.
 
-- [ ] Wait `until arrive` events as alternative
-- [ ] More control over windows api buffer memory size
-- [ ] Watch single files instead of directories
-- [x] Free resources
 
 ## Known issue related to windows API
 	
