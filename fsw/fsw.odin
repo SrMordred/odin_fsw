@@ -37,6 +37,11 @@ FSW_Event :: struct {
     event: FSW_Event_Type 
 }
 
+FSW_Loop_Type :: enum DWORD { 
+    NONBLOCKING = 0,
+    BLOCKING = INFINITE
+}
+
 fsw_create :: proc ( buffer_size:= 16 * 1024, allocator:= context.allocator ) -> (FSW, DWORD) {
     iocp := CreateIoCompletionPort(INVALID_HANDLE, nil, 0,1);
     if iocp == INVALID_HANDLE do return FSW{}, GetLastError();
@@ -93,12 +98,12 @@ fsw_add_dir :: proc (fsw: ^FSW, path: string) -> DWORD {
     return 0;
 }
 
-fsw_get_events :: proc ( fsw: ^FSW )  -> []FSW_Event {
+fsw_get_events :: proc ( fsw: ^FSW, loop_kind:= FSW_Loop_Type.NONBLOCKING )  -> []FSW_Event {
     overlapped: ^OVERLAPPED;
     n_of_bytes := DWORD(0);
     comp_key   := ULONG_PTR(0); //have no idea why i need this, but it wont work without it
 
-    if GetQueuedCompletionStatus(fsw.iocp_handler, &n_of_bytes, &comp_key, &overlapped, 0) == BOOL(false) {
+    if GetQueuedCompletionStatus(fsw.iocp_handler, &n_of_bytes, &comp_key, &overlapped, DWORD(loop_kind) ) == BOOL(false) {
         return []FSW_Event{};
     }
 

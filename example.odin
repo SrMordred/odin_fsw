@@ -16,7 +16,7 @@ main :: proc (){
     //  looping for events
     for { 
         
-        for evt in fsw_get_events( &fsw ) {
+        for evt in fsw_get_events( &fsw, .BLOCKING ) {
             fmt.printf("{}\n", evt);
             // sleep one second here to not kill your cpu :)
             time.sleep( time.Millisecond );

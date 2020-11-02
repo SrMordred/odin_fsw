@@ -39,6 +39,8 @@ FILE_ACTION_MODIFIED            :: win32.FILE_ACTION_MODIFIED;
 FILE_ACTION_RENAMED_OLD_NAME    :: win32.FILE_ACTION_RENAMED_OLD_NAME;
 FILE_ACTION_RENAMED_NEW_NAME    :: win32.FILE_ACTION_RENAMED_NEW_NAME;
 
+INFINITE :: win.INFINITE;
+
 foreign {
     CreateIoCompletionPort      :: proc( file_handle: HANDLE, existing_completion_port: HANDLE, completion_key: ULONG_PTR , n_of_concurrent_threads: DWORD  ) -> HANDLE --- ;
     GetQueuedCompletionStatus   :: proc( completion_port: HANDLE, n_of_bytes_transfered: LPDWORD , completion_key: PULONG_PTR, overlapped: ^LPOVERLAPPED, milliseconds: DWORD ) -> BOOL ---;
